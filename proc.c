@@ -15,6 +15,10 @@ struct {
 static struct proc *initproc;
 
 int nextpid = 1;
+int const FQ = 0; //First queue: the queue that will be run first for 100ms
+//FQ value never changes 
+//AQ and EQ values will change as we need to exchange them
+
 extern void forkret(void);
 extern void trapret(void);
 
@@ -46,6 +50,8 @@ allocproc(void)
 
 found:
   p->state = EMBRYO;
+  p->q_num = FQ; //Set the process a FQ value to be ran first
+  p->quantums = 0;
   p->pid = nextpid++;
   release(&ptable.lock);
 
@@ -266,24 +272,29 @@ void
 scheduler(void)
 {
   struct proc *p;
-
+  int AQ = 1; //Active queue: queue that will be run for 400 ms
+  int EQ = 2; //Expired queue
   for(;;){
     // Enable interrupts on this processor.
     sti();
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+    //Run FQ first 
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
+      if(p->state != RUNNABLE || p->q_num != FQ)
         continue;
-
-      cprintf("Process %d ran for 100ms\n", p->pid);
+      cprintf("Process %d ran for 100ms in the FQ  ", p->pid);
+      cprintf("Process %d q_num is %d  ", p->pid, p->q_num );
+      cprintf("Process %d quantum is %d\n", p->pid, p->quantums );
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
       proc = p;
       switchuvm(p);
       p->state = RUNNING;
+      p->q_num = AQ;
+      p->quantums+=1;
       swtch(&cpu->scheduler, proc->context);
       switchkvm();
 
@@ -291,6 +302,41 @@ scheduler(void)
       // It should have changed its p->state before coming back.
       proc = 0;
     }
+
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE || p->q_num != AQ)
+        continue;
+
+      while(p->quantums < 5){
+        if(p->state != RUNNABLE){
+          break;
+        }
+        cprintf("This is the current AQ: %d  ", AQ);
+        cprintf("Process %d ran for 100ms in the AQ  ", p->pid);
+        cprintf("Process %d q_num is %d  ", p->pid, p->q_num );
+        cprintf("Process %d quantum is %d\n", p->pid, p->quantums );
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
+        p->quantums +=1;
+        swtch(&cpu->scheduler, proc->context);
+        switchkvm();
+
+        proc = 0;
+      };
+      if(p->quantums >=5){
+        p->q_num = EQ;
+        p->quantums = 1;
+      }
+    };
+    //Switch queues
+    int temp = AQ; 
+    AQ = EQ; 
+    EQ = temp;
+
     release(&ptable.lock);
 
   }

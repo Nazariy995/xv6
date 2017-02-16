@@ -66,6 +66,8 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  int q_num;                   // The queue number that the process is in. 
+  int quantums;                // number of quantums that the process has ran
 };
 
 // Process memory is laid out contiguously, low addresses first:
