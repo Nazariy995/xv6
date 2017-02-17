@@ -20,8 +20,7 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
-void
-pinit(void)
+void pinit(void)
 {
   initlock(&ptable.lock, "ptable");
 }
@@ -265,7 +264,10 @@ wait(void)
 void
 scheduler(void)
 {
+
+  cprintf("Start scheduler");
   struct proc *p;
+  struct proc *p2 = proc_AQ[0];
 
   for(;;){
     // Enable interrupts on this processor.
